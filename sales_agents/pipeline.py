@@ -136,8 +136,7 @@ class Pipeline:
     def _assemble_messages(self) -> str:
         parts = []
         for key, label in (
-            ("emails_a_output", "EMAILS - STYLE A"),
-            ("emails_b_output", "EMAILS - STYLE B"),
+            ("emails_output", "EMAILS"),
             ("linkedin_output", "LINKEDIN OUTREACH"),
         ):
             if key in self.values:

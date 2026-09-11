@@ -35,8 +35,7 @@ class StepDefinitionTests(unittest.TestCase):
             "people",
             "pack",
             "grade_research",
-            "emails_a",
-            "emails_b",
+            "emails",
             "linkedin",
             "grade_messages",
         ]:
@@ -48,6 +47,15 @@ class StepDefinitionTests(unittest.TestCase):
         for step in STEPS.values():
             path = PROMPTS_DIR / step.template
             self.assertTrue(path.exists(), f"missing template for {step.id}: {path}")
+
+    def test_no_prompt_file_is_left_behind(self):
+        """A prompt no step points at is a prompt nobody edits, and nobody
+        notices has gone stale."""
+        from sales_agents.steps import PROMPTS_DIR
+
+        used = {step.template for step in STEPS.values()}
+        found = {path.name for path in PROMPTS_DIR.glob("*.md")}
+        self.assertEqual(found - used, set())
 
 
 if __name__ == "__main__":

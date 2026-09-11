@@ -5,11 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from sales_agents import pairings, settings, ui
-from sales_agents.cli import (
-    build_parser,
-    collect_inputs,
-    steps_for_style,
-)
+from sales_agents.cli import build_parser, collect_inputs
+from sales_agents.steps import STEP_ORDER
 from sales_agents.state import RunState
 
 
@@ -98,25 +95,23 @@ class CollectInputsTests(unittest.TestCase):
 
 
 class StepSelectionTests(unittest.TestCase):
-    def test_style_a_drops_style_b(self):
-        ids = steps_for_style("a")
-        self.assertIn("emails_a", ids)
-        self.assertNotIn("emails_b", ids)
+    def test_there_is_one_email_stage(self):
+        self.assertIn("emails", STEP_ORDER)
+        self.assertNotIn("emails_a", STEP_ORDER)
+        self.assertNotIn("emails_b", STEP_ORDER)
 
-    def test_style_b_drops_style_a(self):
-        ids = steps_for_style("b")
-        self.assertIn("emails_b", ids)
-        self.assertNotIn("emails_a", ids)
+    def test_emails_come_after_the_pack_and_before_grading(self):
+        self.assertLess(STEP_ORDER.index("pack"), STEP_ORDER.index("emails"))
+        self.assertLess(STEP_ORDER.index("emails"), STEP_ORDER.index("grade_messages"))
 
-    def test_both_keeps_each_style(self):
-        ids = steps_for_style("both")
-        self.assertIn("emails_a", ids)
-        self.assertIn("emails_b", ids)
+    def test_the_grader_sees_the_research_pack_before_any_email_is_written(self):
+        self.assertLess(
+            STEP_ORDER.index("grade_research"), STEP_ORDER.index("emails")
+        )
 
-    def test_order_is_preserved(self):
-        ids = steps_for_style("both")
-        self.assertLess(ids.index("pack"), ids.index("emails_a"))
-        self.assertLess(ids.index("emails_a"), ids.index("grade_messages"))
+    def test_no_style_flag_is_offered(self):
+        with self.assertRaises(SystemExit):
+            build_parser().parse_args(["run", "--style", "b"])
 
 
 class ParserTests(unittest.TestCase):
@@ -144,6 +139,11 @@ class ParserTests(unittest.TestCase):
     def test_plain_flag_is_available(self):
         args = build_parser().parse_args(["run", "--plain"])
         self.assertTrue(args.plain)
+
+    def test_view_takes_an_optional_run_directory(self):
+        parser = build_parser()
+        self.assertIsNone(parser.parse_args(["view"]).run_dir)
+        self.assertEqual(parser.parse_args(["view", "runs/x"]).run_dir, "runs/x")
 
     def test_continue_takes_a_run_directory(self):
         args = build_parser().parse_args(["continue", "runs/tata-steel"])
@@ -187,7 +187,6 @@ class RunStateTests(unittest.TestCase):
                 run_dir=run_dir,
                 company="Acme",
                 industry="",
-                style="a",
                 model="sonnet",
                 group="",
                 date="2026-09-11",

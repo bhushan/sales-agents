@@ -314,5 +314,85 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(offsets[0], offsets[1])
 
 
+class ScreenTests(unittest.TestCase):
+    def setUp(self):
+        ui.set_color(False)
+        self.stream = io.StringIO()
+
+    def _screen(self, width=40):
+        return ui.Screen(stream=self.stream, enabled=True, width_fn=lambda: width)
+
+    def test_entering_switches_to_the_alternate_buffer(self):
+        with self._screen():
+            pass
+        painted = self.stream.getvalue()
+        self.assertIn(ui.ENTER_ALT_SCREEN, painted)
+        self.assertIn(ui.EXIT_ALT_SCREEN, painted)
+
+    def test_leaving_restores_the_cursor(self):
+        with self._screen():
+            pass
+        self.assertIn(ui.SHOW_CURSOR, self.stream.getvalue())
+
+    def test_draw_starts_at_the_top_and_clears_below(self):
+        screen = self._screen()
+        screen.open()
+        self.stream.truncate(0)
+        self.stream.seek(0)
+        screen.draw(["one", "two"])
+        painted = self.stream.getvalue()
+        self.assertTrue(painted.startswith(ui.CURSOR_HOME))
+        self.assertIn("one", painted)
+        self.assertTrue(painted.endswith(ui.ERASE_BELOW))
+        screen.close()
+
+    def test_draw_clips_lines_to_the_width(self):
+        screen = self._screen(width=20)
+        screen.open()
+        self.stream.truncate(0)
+        self.stream.seek(0)
+        screen.draw(["x" * 100])
+        for line in ui.strip_ansi(self.stream.getvalue()).split("\r\n"):
+            self.assertLessEqual(ui.visible_width(line), 20)
+        screen.close()
+
+    def test_disabled_screen_writes_nothing(self):
+        screen = ui.Screen(stream=self.stream, enabled=False)
+        with screen:
+            screen.draw(["one"])
+        self.assertEqual(self.stream.getvalue(), "")
+
+    def test_suspended_leaves_and_returns(self):
+        screen = self._screen()
+        with screen:
+            self.stream.truncate(0)
+            self.stream.seek(0)
+            with screen.suspended():
+                self.assertIn(ui.EXIT_ALT_SCREEN, self.stream.getvalue())
+            self.assertIn(ui.ENTER_ALT_SCREEN, self.stream.getvalue())
+
+
+class ColumnTests(unittest.TestCase):
+    def setUp(self):
+        ui.set_color(False)
+
+    def test_short_text_is_padded_to_the_column(self):
+        self.assertEqual(ui.column("Mphasis", 12), "Mphasis     ")
+
+    def test_a_name_that_fills_the_column_still_leaves_a_gap(self):
+        """Otherwise the next column runs straight into the name, which is
+        what "IIM Bangalore (new prompts)complete" looked like."""
+        cell = ui.column("IIM Bangalore (new prompts)", 12)
+        self.assertEqual(ui.visible_width(cell), 12)
+        self.assertTrue(cell.endswith(" "), cell)
+
+    def test_colour_does_not_change_the_width(self):
+        ui.set_color(True)
+        try:
+            self.assertEqual(ui.visible_width(ui.column(ui.bold("Tata Steel"), 20)), 20)
+        finally:
+            ui.set_color(False)
+
+
 if __name__ == "__main__":
     unittest.main()

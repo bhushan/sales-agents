@@ -23,7 +23,7 @@ DO NOT USE
 GRADE_MESSAGES = """
 1. In today's volatile input-cost environment — GENERIC
 
-SENTENCES: 20 | FROM PACK: 15 | GENERIC: 3 | MADE UP: 1 | BANNED: 1
+SENTENCES: 20 | FROM PACK: 13 | INFERRED: 2 | GENERIC: 3 | MADE UP: 1 | BANNED: 1
 """
 
 
@@ -43,7 +43,8 @@ class ParseCountsTests(unittest.TestCase):
     def test_reads_the_message_grader_counters(self):
         counts = scoreboard.parse_counts(GRADE_MESSAGES)
         self.assertEqual(counts["SENTENCES"], 20)
-        self.assertEqual(counts["FROM PACK"], 15)
+        self.assertEqual(counts["FROM PACK"], 13)
+        self.assertEqual(counts["INFERRED"], 2)
         self.assertEqual(counts["MADE UP"], 1)
         self.assertEqual(counts["BANNED"], 1)
 
@@ -74,6 +75,7 @@ class BadgeTests(unittest.TestCase):
         badge = scoreboard.badge(GRADE_MESSAGES)
         self.assertIn("made up", badge.lower())
         self.assertIn("banned", badge.lower())
+        self.assertIn("inferred", badge.lower())
 
     def test_output_without_counters_has_no_badge(self):
         self.assertEqual(scoreboard.badge("just prose"), "")
@@ -129,6 +131,48 @@ class MessageVerdictTests(unittest.TestCase):
         )
         self.assertEqual(level, "good")
         self.assertIn("strong", message.lower())
+
+    def test_a_consequence_drawn_from_the_pack_counts_as_grounded(self):
+        """The email prompt asks for the "so what" of a fact. Grading that
+        as invention was the false alarm that made the gate useless."""
+        level, _ = scoreboard.message_verdict(
+            {
+                "SENTENCES": 10,
+                "FROM PACK": 5,
+                "INFERRED": 3,
+                "GENERIC": 2,
+                "MADE UP": 0,
+                "BANNED": 0,
+            }
+        )
+        self.assertEqual(level, "good")
+
+    def test_an_email_leaning_on_inference_more_than_sources_is_not_strong(self):
+        level, message = scoreboard.message_verdict(
+            {
+                "SENTENCES": 10,
+                "FROM PACK": 2,
+                "INFERRED": 7,
+                "GENERIC": 1,
+                "MADE UP": 0,
+                "BANNED": 0,
+            }
+        )
+        self.assertEqual(level, "warn")
+        self.assertIn("inference", message.lower())
+
+    def test_invention_still_blocks_the_message_whatever_else_is_true(self):
+        level, _ = scoreboard.message_verdict(
+            {
+                "SENTENCES": 10,
+                "FROM PACK": 8,
+                "INFERRED": 1,
+                "GENERIC": 0,
+                "MADE UP": 1,
+                "BANNED": 0,
+            }
+        )
+        self.assertEqual(level, "bad")
 
     def test_no_sentences_has_no_verdict(self):
         self.assertIsNone(scoreboard.message_verdict({}))

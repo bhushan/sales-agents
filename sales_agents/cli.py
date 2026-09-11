@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import pairings, scoreboard, settings, ui
+from . import browser, pairings, runs, scoreboard, settings, ui
 from .dashboard import Dashboard
 from .pipeline import MissingDependencyError, Pipeline
 from .runner import DEFAULT_TIMEOUT, ClaudeRunError, run_claude
@@ -70,12 +70,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target account's industry (default: the chain works it out).",
     )
     run_p.add_argument("--group", default="", help="Workshop group label (optional).")
-    run_p.add_argument(
-        "--style",
-        choices=["a", "b", "both"],
-        default=None,
-        help="Email style to generate (default: a).",
-    )
     run_p.add_argument("--model", default=None, help="Model alias passed to `claude --model`.")
     run_p.add_argument(
         "--out-dir",
@@ -113,6 +107,18 @@ def build_parser() -> argparse.ArgumentParser:
     list_p.add_argument("--out-dir", default=str(DEFAULT_RUNS_DIR))
     _add_display_flags(list_p)
 
+    view_p = sub.add_parser(
+        "view", help="Browse the stage outputs of a run, interactively."
+    )
+    view_p.add_argument(
+        "run_dir",
+        nargs="?",
+        default=None,
+        help="Run directory to open (default: pick from a list).",
+    )
+    view_p.add_argument("--out-dir", default=str(DEFAULT_RUNS_DIR))
+    _add_display_flags(view_p)
+
     return parser
 
 
@@ -122,15 +128,6 @@ def _add_display_flags(parser) -> None:
         action="store_true",
         help="No colour, no animation. Use this in CI or when piping to a file.",
     )
-
-
-def steps_for_style(style: str):
-    ids = list(STEP_ORDER)
-    if style == "a":
-        return [s for s in ids if s != "emails_b"]
-    if style == "b":
-        return [s for s in ids if s != "emails_a"]
-    return ids
 
 
 # --------------------------------------------------------------------------
@@ -177,7 +174,7 @@ def collect_inputs(
     return values
 
 
-def _plan_lines(values, run_dir, step_ids, model, style):
+def _plan_lines(values, run_dir, step_ids, model):
     return [
         ui.field_row("You sell for", ui.bold(values["seller"]), LABEL_WIDTH),
         ui.field_row("What they sell", values["offering"], LABEL_WIDTH),
@@ -189,7 +186,7 @@ def _plan_lines(values, run_dir, step_ids, model, style):
         ),
         ui.field_row(
             "Plan",
-            f"{len(step_ids)} stages · {model} · email style {style}",
+            f"{len(step_ids)} stages · {model}",
             LABEL_WIDTH,
         ),
         ui.field_row("Output", str(run_dir), LABEL_WIDTH),
@@ -286,12 +283,11 @@ def cmd_run(args) -> int:
         return 130
 
     model = args.model or recent.get("model") or "sonnet"
-    style = args.style or recent.get("style") or "a"
     out_dir = Path(args.out_dir)
     run_dir = out_dir / slugify(values["company"])
-    step_ids = steps_for_style(style)
+    step_ids = list(STEP_ORDER)
 
-    out.write("\n" + "\n".join(_plan_lines(values, run_dir, step_ids, model, style)) + "\n")
+    out.write("\n" + "\n".join(_plan_lines(values, run_dir, step_ids, model)) + "\n")
 
     if (run_dir / "state.json").exists():
         out.write(
@@ -305,7 +301,6 @@ def cmd_run(args) -> int:
         run_dir=run_dir,
         company=values["company"],
         industry=values["industry"],
-        style=style,
         model=model,
         group=args.group,
         date=args.date or time.strftime("%Y-%m-%d"),
@@ -319,7 +314,6 @@ def cmd_run(args) -> int:
             "seller": values["seller"],
             "offering": values["offering"],
             "model": model,
-            "style": style,
         }
     )
 
@@ -335,7 +329,7 @@ def cmd_continue(args) -> int:
         return 1
 
     _banner(sys.stdout)
-    step_ids = steps_for_style(state.style)
+    step_ids = list(STEP_ORDER)
     values = {
         "seller": state.seller,
         "offering": state.offering,
@@ -344,7 +338,7 @@ def cmd_continue(args) -> int:
     }
     print(
         "\n"
-        + "\n".join(_plan_lines(values, run_dir, step_ids, state.model, state.style))
+        + "\n".join(_plan_lines(values, run_dir, step_ids, state.model))
     )
     print(
         ui.field_row(
@@ -370,7 +364,7 @@ def cmd_list(args) -> int:
             state = RunState.load(child)
         except (OSError, ValueError):
             continue
-        step_ids = steps_for_style(state.style)
+        step_ids = list(STEP_ORDER)
         done = sum(1 for step_id in step_ids if step_id in state.completed)
         remaining = [s for s in step_ids if s not in state.completed]
         status = (
@@ -382,11 +376,11 @@ def cmd_list(args) -> int:
             "  "
             + ui.progress_bar(done, len(step_ids), width=14)
             + f"  {done:>2}/{len(step_ids)}  "
-            + ui.pad(ui.bold(state.company), 24)
+            + ui.column(ui.bold(state.company), 26)
             + status
         )
         print("  " + ui.dim(" " * 16 + str(child)))
-    print()
+    print("\n  " + ui.dim("Read one with: ") + ui.bold("sales-agents view") + "\n")
     return 0
 
 
@@ -396,7 +390,7 @@ def cmd_list(args) -> int:
 
 
 def _execute(state: RunState, args) -> int:
-    step_ids = steps_for_style(state.style)
+    step_ids = list(STEP_ORDER)
     steps = [STEPS[step_id] for step_id in step_ids]
     live = not getattr(args, "plain", False) and sys.stdout.isatty()
     dash = Dashboard(steps, live=live)
@@ -459,8 +453,59 @@ def _execute(state: RunState, args) -> int:
             + "\n"
         )
         return exit_code or 1
-    print("\n  " + ui.green("All stages done.") + ui.dim(f"  Files in {state.run_dir}\n"))
+    print(
+        "\n  "
+        + ui.green("All stages done.")
+        + ui.dim("  Read them with: ")
+        + ui.bold(f"sales-agents view {state.run_dir}")
+        + "\n"
+    )
     return exit_code
+
+
+def cmd_view(args) -> int:
+    out_dir = Path(args.out_dir)
+
+    if args.run_dir:
+        try:
+            summaries = [runs.load(Path(args.run_dir))]
+        except (OSError, ValueError):
+            print(f"No readable state.json under {args.run_dir}.", file=sys.stderr)
+            return 1
+    else:
+        summaries = runs.discover(out_dir)
+
+    if not summaries:
+        print(f"\n  {ui.dim('No runs yet under ' + str(out_dir))}\n")
+        return 0
+
+    if getattr(args, "plain", False) or not sys.stdout.isatty():
+        _print_stages(summaries)
+        return 0
+
+    start = summaries[0] if (args.run_dir or len(summaries) == 1) else None
+    return browser.browse(summaries, start=start)
+
+
+def _print_stages(summaries) -> None:
+    """The same information as the viewer, for pipes and logs."""
+    for summary in summaries:
+        print(
+            "\n  "
+            + ui.bold(summary.state.company)
+            + ui.dim(f"   {summary.done}/{summary.total} stages   {summary.run_dir}")
+        )
+        for stage in summary.stages():
+            mark = ui.GLYPH["done"] if stage.exists else ui.GLYPH["pending"]
+            detail = stage.badge or ("" if stage.exists else "not run yet")
+            print(
+                "    "
+                + mark
+                + " "
+                + ui.pad(stage.step.title, 46)
+                + ui.dim(detail)
+            )
+    print()
 
 
 def _print_scoreboard(state: RunState, step_ids) -> None:
@@ -497,6 +542,8 @@ def main(argv=None) -> int:
         return cmd_continue(args)
     if args.command == "list":
         return cmd_list(args)
+    if args.command == "view":
+        return cmd_view(args)
     parser.print_help()
     return 1
 

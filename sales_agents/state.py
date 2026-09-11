@@ -18,7 +18,6 @@ class RunState:
     run_dir: Path
     company: str
     industry: str
-    style: str
     model: str
     group: str
     date: str

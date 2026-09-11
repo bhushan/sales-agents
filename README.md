@@ -18,7 +18,7 @@ prompt file contains a company name.
 
 ```
 icp -> shift -> account -> roles -> people -> pack -> grade research
-     -> emails (style a and/or b) -> linkedin -> grade messages
+     -> emails -> linkedin -> grade messages
 ```
 
 Each stage calls the local `claude` CLI in headless mode, using your
@@ -56,6 +56,62 @@ Resume an interrupted or paused run, and see what is on disk:
 ./bin/sales-agents continue research-chain/outputs/tata-steel
 ./bin/sales-agents list
 ```
+
+## Reading the outputs
+
+```bash
+./bin/sales-agents view
+```
+
+Pick a run from the list, then read every stage without leaving the
+terminal. The stage list stays on the left, the stage's own output fills
+the pane on the right, and the counters and verdict for whatever you are
+looking at sit under the list:
+
+```
+  IIM Bangalore   Alfred Scholar → research workspace for scholars   2026-09-11
+
+  ✔ The ICP — who should you sell …  │ Account: IIM Bangalore
+  ✔ The shift — what changed in th…  │ What they do and where their money goes:
+❯ ✔ The account — where you would …  │ Claim          IIMB runs a 5-year residential Doctoral
+  ✔ The role — who would be involv…  │                Programme, fully funded via a ₹42,000/month
+  ✔ The person — real names and ev…  │                stipend + tuition waiver
+  ✔ The pack — everything in one f…  │ Source + date  IIMB PhD admission page, 2026 cycle
+  ✔ Grade the research               │ Status         VERIFIED
+  ✔ The emails — three, in sequence  │
+  ✔ LinkedIn — connect request + 3…  │ Claim          IIMB owns and funds its own peer-reviewed
+  ✔ Grade the messages               │                journal, IIMB Management Review
+                                     │ Source + date  iimb.ac.in/imr (current site)
+  02-account.md                      │ Status         VERIFIED
+  VERIFIED: 10 | ASSERTED: 0 |       │
+  TOTAL: 10                          │ How they handle this today:
+
+  stage 3/10 · 1-28 of 121   ↑↓ scroll · ←→ stage · e edit · r runs · q quit
+```
+
+Markdown is rendered, not shown raw: headings stand out, `**markers**`
+are gone, and a table lines up into columns. A table too wide for the
+pane becomes labelled records, as above, because the alternative is
+cutting off the source that makes the claim worth anything.
+
+A tick means the stage ran; its colour, and `!`, are what the grader made
+of what it produced. `VERIFIED` and `FROM PACK` are green, `ASSERTED`,
+`INFERRED`, `GENERIC` and `STALE` amber, `MADE UP`, `BANNED` and
+`DO NOT USE` red, so a weak stage is visible before you read a word of it.
+
+| Key | Does |
+| --- | --- |
+| `↑` `↓` `j` `k` | Scroll the stage's text |
+| `←` `→` `n` `p` `tab` | Previous / next stage |
+| `pgup` `pgdn` `space` | Page through a long output |
+| `home` `end` `g` | Jump to the top or bottom |
+| `e` | Open the current stage in `$EDITOR` |
+| `r` `esc` | Back to the list of runs |
+| `q` | Quit |
+
+Open one run directly with `./bin/sales-agents view <run-dir>`. Piped or
+with `--plain`, it prints the same stage list and counters as flat text
+instead of taking over the screen.
 
 ## What you see while it runs
 
@@ -107,14 +163,25 @@ end, with the workshop's own thresholds applied:
   The shift — what changed …    VERIFIED: 3 | ASSERTED: 1 | TOTAL: 4
   Grade the research            ROWS: 12 | FAILED A: 2 | FAILED B: 1 | FAILED C: 3
                                 Strong. Check it is useful, not just cautious.
-  Grade the messages            SENTENCES: 20 | FROM PACK: 15 | GENERIC: 3 | MADE UP: 1
-                                Does not go out: 1 made up, 0 banned.
+  Grade the messages            SENTENCES: 24 | FROM PACK: 10 | INFERRED: 7 |
+                                GENERIC: 7 | MADE UP: 0 | BANNED: 0
+                                Strong. Read it aloud and check a person
+                                could have written it.
 ```
 
 - Under 50% of rows sourced: not usable in front of a buyer.
 - 50–74%: normal first attempt, fix the prompt rather than the chat.
 - 75%+: strong.
 - Any `MADE UP` or `BANNED` sentence: the message does not go out.
+- More `INFERRED` than `FROM PACK`: the email is reasoning where it
+  should be citing. Go back for facts.
+
+A sentence is `FROM PACK` when it says what a sourced field says, and
+`INFERRED` when it only draws a consequence from pack fields without
+adding a fact. The split matters because the email prompt asks for the
+"so what" of a change: grading that as invention made the gate fire on
+sentences it had itself demanded, which is how a real `MADE UP` gets
+lost in the noise.
 
 ## What is automated, and what is not
 
@@ -134,7 +201,6 @@ end, with the workshop's own thresholds applied:
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--style {a,b,both}` | `a` | Which email style to write (A opens with the industry change, B opens with what the person said or did). |
 | `--model` | `sonnet` | Model alias passed to `claude --model`. |
 | `--auto` | off | Do not pause between stages. |
 | `--budget` | none | Stop a stage that would cost more than this many dollars. |

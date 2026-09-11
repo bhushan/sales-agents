@@ -26,7 +26,6 @@ def make_state(run_dir, **overrides):
         run_dir=run_dir,
         company="Acme Steel",
         industry="Manufacturing",
-        style="a",
         model="sonnet",
         group="",
         date="2026-09-11",

@@ -22,6 +22,7 @@ COUNTER_NAMES = (
     "FAILED D",
     "SENTENCES",
     "FROM PACK",
+    "INFERRED",
     "GENERIC",
     "MADE UP",
     "BANNED",
@@ -62,6 +63,8 @@ def research_verdict(counts: dict):
 
 
 def message_verdict(counts: dict):
+    """A sentence is defensible if it states a sourced fact, or draws a
+    consequence from one. Only invention blocks the send."""
     sentences = counts.get("SENTENCES", 0)
     if not sentences:
         return None
@@ -69,9 +72,14 @@ def message_verdict(counts: dict):
     banned = counts.get("BANNED", 0)
     if made_up or banned:
         return "bad", f"Does not go out: {made_up} made up, {banned} banned."
+
+    from_pack = counts.get("FROM PACK", 0)
+    inferred = counts.get("INFERRED", 0)
     if counts.get("GENERIC", 0) / sentences > 0.30:
         return "warn", "The research did not earn the email. Fix the sentences."
-    if counts.get("FROM PACK", 0) / sentences > 0.70:
+    if (from_pack + inferred) / sentences > 0.70:
+        if inferred > from_pack:
+            return "warn", "More inference than evidence. Go back for facts."
         return "good", "Strong. Read it aloud and check a person could have written it."
     return "warn", "Thin. Most sentences should trace to a pack field."
 
@@ -84,6 +92,7 @@ def badge(text: str) -> str:
     if "SENTENCES" in counts:
         return (
             f"{counts.get('FROM PACK', 0)} from pack · "
+            f"{counts.get('INFERRED', 0)} inferred · "
             f"{counts.get('MADE UP', 0)} made up · {counts.get('BANNED', 0)} banned"
         )
     if "ROWS" in counts:

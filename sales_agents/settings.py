@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-REMEMBERED_KEYS = ("seller", "offering", "model", "style")
+REMEMBERED_KEYS = ("seller", "offering", "model")
 
 
 def default_path() -> Path:

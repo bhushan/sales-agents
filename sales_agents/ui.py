@@ -3,6 +3,7 @@ repainting live region. Stdlib only, so the CLI stays installable by copying
 the repo. Everything degrades to plain text when stdout is not a terminal."""
 
 import atexit
+import contextlib
 import os
 import re
 import shutil
@@ -17,6 +18,9 @@ HIDE_CURSOR = f"{ESC}[?25l"
 SHOW_CURSOR = f"{ESC}[?25h"
 ERASE_LINE = f"{ESC}[2K"
 ERASE_BELOW = f"{ESC}[0J"
+ENTER_ALT_SCREEN = f"{ESC}[?1049h"
+EXIT_ALT_SCREEN = f"{ESC}[?1049l"
+CURSOR_HOME = f"{ESC}[H"
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 
@@ -160,6 +164,12 @@ def truncate(text: str, width: int) -> str:
 
 def pad(text: str, width: int) -> str:
     return text + " " * max(0, width - visible_width(text))
+
+
+def column(text: str, width: int) -> str:
+    """A fixed-width cell that always leaves a gap after its text, so a long
+    value cannot run into the next column."""
+    return pad(truncate(text, max(1, width - 1)), width)
 
 
 def terminal_width(default: int = 80) -> int:
@@ -464,3 +474,60 @@ class LiveRegion:
 
 def sleep(seconds: float) -> None:
     time.sleep(seconds)
+
+
+class Screen:
+    """The alternate screen buffer, for full-screen views. Entering leaves the
+    scrollback untouched; leaving puts the shell back exactly as it was."""
+
+    def __init__(self, stream=None, enabled=None, width_fn=terminal_width):
+        self.stream = stream or sys.stdout
+        self.enabled = detect_color(self.stream) if enabled is None else bool(enabled)
+        self.width_fn = width_fn
+        self._active = False
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+    def open(self):
+        if not self.enabled or self._active:
+            return
+        self._write(ENTER_ALT_SCREEN + HIDE_CURSOR)
+        self._active = True
+        atexit.register(self.close)
+
+    def close(self):
+        if not self._active:
+            return
+        self._write(SHOW_CURSOR + EXIT_ALT_SCREEN)
+        self._active = False
+
+    @contextlib.contextmanager
+    def suspended(self):
+        """Drop back to the normal screen, e.g. to hand over to $EDITOR."""
+        was_active = self._active
+        self.close()
+        try:
+            yield
+        finally:
+            if was_active:
+                self.open()
+
+    def draw(self, lines):
+        if not self.enabled:
+            return
+        width = max(8, self.width_fn())
+        painted = [ERASE_LINE + truncate(line, width) for line in lines]
+        self._write(CURSOR_HOME + "\r\n".join(painted) + ERASE_BELOW)
+
+    def _write(self, text):
+        try:
+            self.stream.write(text)
+            self.stream.flush()
+        except (ValueError, OSError):
+            self.enabled = False
