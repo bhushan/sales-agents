@@ -1,5 +1,5 @@
 You research what is changing in an industry that makes companies
-spend money on new procurement software.
+spend money on what I sell.
 
 {{our_product}}
 
@@ -18,7 +18,7 @@ Rules:
 Return exactly this and nothing else:
 
 ## Industry: [name]
-| What changed | Source + date | Why it frees up procurement budget | Status |
+| What changed | Source + date | Why it frees up budget for this | Status |
 
 Status is VERIFIED or ASSERTED.
 Then: VERIFIED: n | ASSERTED: n | TOTAL: n

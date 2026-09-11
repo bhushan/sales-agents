@@ -8,7 +8,7 @@ Rules:
    history, founder stories, awards.
 2. Every claim needs a named source with a date. Mark anything older
    than 24 months as STALE next to the date.
-3. If you cannot find how they run procurement today, write
+3. If you cannot find how they handle this today, write
    "not publicly findable". Do not guess.
 
 Return exactly this and nothing else:
@@ -17,11 +17,11 @@ Return exactly this and nothing else:
 What they do and where their money goes:
 | Claim | Source + date | Status |
 
-How they run procurement today:
+How they handle this today:
 | Claim | Source + date | Status |
 
 What changed at this company in the last 12 months:
-| Event | Why it matters for procurement | Source + date | Status |
+| Event | Why it matters for this purchase | Source + date | Status |
 
 Which change from Step 1 applies to them, and which does not:
 

@@ -51,7 +51,7 @@ STEPS = {
     for step in [
         Step(
             id="icp",
-            title="Step 0 — Who should you sell to?",
+            title="The ICP — who should you sell to?",
             template="00_icp.md",
             output_name="00-icp.md",
             produces="icp",
@@ -59,7 +59,7 @@ STEPS = {
         ),
         Step(
             id="industry",
-            title="Step 1 — What is changing in their industry?",
+            title="The shift — what changed in their industry?",
             template="01_industry.md",
             output_name="01-industry.md",
             produces="industry_output",
@@ -67,7 +67,7 @@ STEPS = {
         ),
         Step(
             id="account",
-            title="Step 2 — Account research",
+            title="The account — where you would fit",
             template="02_account.md",
             output_name="02-account.md",
             produces="account_output",
@@ -75,7 +75,7 @@ STEPS = {
         ),
         Step(
             id="roles",
-            title="Step 3 — Who would be involved",
+            title="The role — who would be involved",
             template="03_roles.md",
             output_name="03-roles.md",
             produces="roles_output",
@@ -83,7 +83,7 @@ STEPS = {
         ),
         Step(
             id="people",
-            title="Step 4 — Real named people",
+            title="The person — real names and evidence",
             template="04_people.md",
             output_name="04-people.md",
             produces="people_output",
@@ -91,7 +91,7 @@ STEPS = {
         ),
         Step(
             id="pack",
-            title="Assemble the personalization pack",
+            title="The pack — everything in one file",
             template="05_pack.md",
             output_name="05-personalization-pack.md",
             produces="pack_output",
@@ -116,7 +116,7 @@ STEPS = {
         ),
         Step(
             id="emails_a",
-            title="Emails — Style A (open with the industry change)",
+            title="Emails · style A — lead with the insight",
             template="07a_emails_style_a.md",
             output_name="07a-emails-style-a.md",
             produces="emails_a_output",
@@ -124,7 +124,7 @@ STEPS = {
         ),
         Step(
             id="emails_b",
-            title="Emails — Style B (open with what the person said/did)",
+            title="Emails · style B — lead with the evidence",
             template="07b_emails_style_b.md",
             output_name="07b-emails-style-b.md",
             produces="emails_b_output",
@@ -132,7 +132,7 @@ STEPS = {
         ),
         Step(
             id="linkedin",
-            title="LinkedIn outreach",
+            title="LinkedIn — connect request + 3 messages",
             template="08_linkedin.md",
             output_name="08-linkedin.md",
             produces="linkedin_output",

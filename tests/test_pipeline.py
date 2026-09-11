@@ -2,7 +2,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from sales_agents.pipeline import Pipeline
+from sales_agents.pipeline import Pipeline, compose_our_product
+from sales_agents.runner import Activity
 from sales_agents.state import RunState
 
 
@@ -12,9 +13,11 @@ class FakeRunner:
     def __init__(self, responses):
         self.queue = list(responses)
         self.calls = []
+        self.kwargs = []
 
-    def __call__(self, prompt, model=None):
+    def __call__(self, prompt, **kwargs):
         self.calls.append(prompt)
+        self.kwargs.append(kwargs)
         return self.queue.pop(0)
 
 
@@ -27,6 +30,8 @@ def make_state(run_dir, **overrides):
         model="sonnet",
         group="",
         date="2026-09-11",
+        seller="MoveInSync",
+        offering="employee commute automation",
         completed={},
     )
     defaults.update(overrides)
@@ -66,6 +71,83 @@ class PipelineOrderingTests(unittest.TestCase):
 
             self.assertEqual(len(runner.calls), 1)
             self.assertIn("OLD ICP OUTPUT", runner.calls[0])
+
+
+class PipelineInputTests(unittest.TestCase):
+    def test_what_they_sell_is_woven_into_the_first_prompt(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            state = make_state(run_dir, offering="employee commute automation")
+            runner = FakeRunner(["ICP OUTPUT"])
+            Pipeline(state, runner).run(["icp"])
+            self.assertIn("employee commute automation", runner.calls[0])
+            self.assertIn("MoveInSync", runner.calls[0])
+
+    def test_blank_industry_asks_the_model_to_identify_it(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            state = make_state(run_dir, industry="")
+            runner = FakeRunner(["ICP OUTPUT", "INDUSTRY OUTPUT"])
+            Pipeline(state, runner).run(["icp", "industry"])
+            prompt = runner.calls[1]
+            self.assertIn("Acme Steel", prompt)
+            self.assertIn("identify", prompt.lower())
+
+    def test_given_industry_is_used_verbatim(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            state = make_state(run_dir, industry="Steel manufacturing")
+            runner = FakeRunner(["ICP OUTPUT", "INDUSTRY OUTPUT"])
+            Pipeline(state, runner).run(["icp", "industry"])
+            self.assertIn("Steel manufacturing", runner.calls[1])
+
+    def test_falls_back_to_the_context_file_when_no_offering_is_set(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            context_dir = run_dir / "context"
+            context_dir.mkdir()
+            (context_dir / "our_product.md").write_text("A FILE-BASED PITCH\n")
+            state = make_state(run_dir, offering="", seller="")
+            runner = FakeRunner(["ICP OUTPUT"])
+            Pipeline(state, runner, context_dir=context_dir).run(["icp"])
+            self.assertIn("A FILE-BASED PITCH", runner.calls[0])
+
+
+class ComposeOurProductTests(unittest.TestCase):
+    def test_names_the_seller_and_the_offering(self):
+        text = compose_our_product("MoveInSync", "employee commute automation")
+        self.assertIn("MoveInSync", text)
+        self.assertIn("employee commute automation", text)
+
+    def test_offering_alone_is_enough(self):
+        self.assertIn("commute", compose_our_product("", "commute automation"))
+
+    def test_returns_empty_without_an_offering(self):
+        self.assertEqual(compose_our_product("MoveInSync", ""), "")
+
+
+class PipelineActivityTests(unittest.TestCase):
+    def test_activity_callback_is_handed_to_the_runner(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            state = make_state(run_dir)
+            runner = FakeRunner(["ICP OUTPUT"])
+            seen = []
+            pipeline = Pipeline(state, runner, on_activity=seen.append)
+
+            pipeline.run(["icp"])
+
+            callback = runner.kwargs[0]["on_activity"]
+            callback(Activity(kind="tool", label="WebSearch"))
+            self.assertEqual(seen[0].label, "WebSearch")
+
+    def test_model_is_handed_to_the_runner(self):
+        with TemporaryDirectory() as tmp:
+            run_dir = Path(tmp)
+            state = make_state(run_dir, model="opus")
+            runner = FakeRunner(["ICP OUTPUT"])
+            Pipeline(state, runner).run(["icp"])
+            self.assertEqual(runner.kwargs[0]["model"], "opus")
 
 
 class PipelineCheckpointTests(unittest.TestCase):

@@ -12,25 +12,63 @@ class MissingDependencyError(RuntimeError):
 _DO_NOT_USE_PLACEHOLDER_RE = re.compile(r"## Do not use\n(?:-\s*\n?)*")
 
 
+def compose_our_product(seller: str, offering: str) -> str:
+    """The one-liner every prompt opens with, built from the two answers the
+    wizard collects. Empty when there is nothing to say."""
+    offering = (offering or "").strip()
+    if not offering:
+        return ""
+    seller = (seller or "").strip()
+    if seller:
+        return f"I sell for {seller}. What we sell: {offering}"
+    return f"What I sell: {offering}"
+
+
+def auto_industry_brief(company: str) -> str:
+    return (
+        f"not given — identify the primary industry {company} operates in "
+        "yourself, from public sources, name it in the heading, and research "
+        "that industry"
+    )
+
+
 class Pipeline:
     """Runs a chain of Steps through `runner`, persisting output files and
     resumable state under state.run_dir."""
 
-    def __init__(self, state: RunState, runner, context_dir: Path = CONTEXT_DIR):
+    def __init__(
+        self,
+        state: RunState,
+        runner,
+        context_dir: Path = CONTEXT_DIR,
+        on_activity=None,
+    ):
         self.state = state
         self.runner = runner
         self.context_dir = Path(context_dir)
+        self.on_activity = on_activity
         self.values = {
             "company": state.company,
-            "industry": state.industry,
+            "industry": state.industry.strip() or auto_industry_brief(state.company),
             "group": state.group,
             "date": state.date,
             "seller": state.seller,
         }
-        self.values["our_product"] = (
-            (self.context_dir / "our_product.md").read_text().strip()
-        )
+        self.values["our_product"] = self._our_product()
         self._load_completed_outputs()
+
+    def _our_product(self) -> str:
+        composed = compose_our_product(self.state.seller, self.state.offering)
+        if composed:
+            return composed
+        path = self.context_dir / "our_product.md"
+        try:
+            return path.read_text().strip()
+        except OSError as exc:
+            raise MissingDependencyError(
+                "No product description: pass what you sell, or write one to "
+                f"{path}."
+            ) from exc
 
     def _load_completed_outputs(self) -> None:
         for step_id, rel_path in self.state.completed.items():
@@ -91,7 +129,9 @@ class Pipeline:
 
         template = load_template(step)
         prompt = render(template, self.values)
-        return self.runner(prompt, model=self.state.model)
+        return self.runner(
+            prompt, model=self.state.model, on_activity=self.on_activity
+        )
 
     def _assemble_messages(self) -> str:
         parts = []

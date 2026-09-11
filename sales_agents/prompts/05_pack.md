@@ -39,7 +39,7 @@ Why it frees up budget:
 Status:
 
 ## What changed at this company
-How they run procurement today:
+How they handle this today:
 What happened in the last 12 months:
 Source + date:
 Status:

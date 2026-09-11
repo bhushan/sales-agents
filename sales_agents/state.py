@@ -1,6 +1,6 @@
 import json
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 from pathlib import Path
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -23,6 +23,7 @@ class RunState:
     group: str
     date: str
     seller: str = ""
+    offering: str = ""
     completed: dict = field(default_factory=dict)
 
     def save(self) -> None:
@@ -37,4 +38,5 @@ class RunState:
         run_dir = Path(run_dir)
         raw = json.loads((run_dir / STATE_FILENAME).read_text())
         raw["run_dir"] = run_dir
-        return cls(**raw)
+        known = {f.name for f in fields(cls)}
+        return cls(**{key: value for key, value in raw.items() if key in known})
