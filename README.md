@@ -1,9 +1,11 @@
 # sales-agents
 
 A CLI that chains Prof. Rishabh Ladha's "Art of Selling" AI-agent-workshop
-prompts (Procol case) into one pipeline: each step's output automatically
-feeds the next step's input, the way the workshop's manual copy-paste was
-meant to work.
+prompts (originally built around the Procol case) into one pipeline: each
+step's output automatically feeds the next step's input, the way the
+workshop's manual copy-paste was meant to work. Who you sell for, what you
+sell, and the target account are all inputs — nothing is hardcoded to a
+specific product.
 
 ```
 icp -> industry -> account -> roles -> people -> pack -> grade_research
@@ -22,8 +24,13 @@ research stages are restricted to the `WebSearch` and `WebFetch` tools only.
 ## Usage
 
 ```bash
-./bin/sales-agents run --company "Tata Steel" --industry "Steel manufacturing"
+./bin/sales-agents run --seller "MoveInSync" --company "Tata Steel" --industry "Steel manufacturing"
 ```
+
+- `--seller` — who you sell for (e.g. "MoveInSync"). Used in the outreach
+  copy ("Write three cold emails from a {{seller}} salesperson...").
+- `--company` — the target account.
+- `--industry` — the target account's industry.
 
 This creates `research-chain/outputs/tata-steel/`, runs each stage in
 order, and after every stage:
@@ -71,9 +78,10 @@ List runs and progress:
 
 ## Editing the product pitch
 
-The one-liner used by every prompt ("I sell Procol...") lives in
-`sales_agents/context/our_product.md`. Edit it if you want to point this
-chain at a different product.
+The "what we sell" one-liner used by every prompt (`{{our_product}}`) lives
+in `sales_agents/context/our_product.md`. Edit it whenever you point this
+chain at a different product — pair it with a matching `--seller` value on
+the command line.
 
 ## Tests
 

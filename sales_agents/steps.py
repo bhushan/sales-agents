@@ -51,7 +51,7 @@ STEPS = {
     for step in [
         Step(
             id="icp",
-            title="Step 0 — Who should Procol sell to?",
+            title="Step 0 — Who should you sell to?",
             template="00_icp.md",
             output_name="00-icp.md",
             produces="icp",
@@ -71,7 +71,7 @@ STEPS = {
             template="02_account.md",
             output_name="02-account.md",
             produces="account_output",
-            requires=("industry_output", "company"),
+            requires=("industry_output", "company", "seller"),
         ),
         Step(
             id="roles",
@@ -79,7 +79,7 @@ STEPS = {
             template="03_roles.md",
             output_name="03-roles.md",
             produces="roles_output",
-            requires=("account_output", "company"),
+            requires=("account_output", "company", "seller"),
         ),
         Step(
             id="people",
@@ -120,7 +120,7 @@ STEPS = {
             template="07a_emails_style_a.md",
             output_name="07a-emails-style-a.md",
             produces="emails_a_output",
-            requires=("pack_output",),
+            requires=("pack_output", "seller"),
         ),
         Step(
             id="emails_b",
@@ -128,7 +128,7 @@ STEPS = {
             template="07b_emails_style_b.md",
             output_name="07b-emails-style-b.md",
             produces="emails_b_output",
-            requires=("pack_output",),
+            requires=("pack_output", "seller"),
         ),
         Step(
             id="linkedin",
@@ -136,7 +136,7 @@ STEPS = {
             template="08_linkedin.md",
             output_name="08-linkedin.md",
             produces="linkedin_output",
-            requires=("pack_output",),
+            requires=("pack_output", "seller"),
         ),
         Step(
             id="grade_messages",

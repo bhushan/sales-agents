@@ -3,7 +3,7 @@ rows that failed grading:
 
 {{pack_output}}
 
-Write LinkedIn outreach from a Procol salesperson to the person
+Write LinkedIn outreach from a {{seller}} salesperson to the person
 in the pack.
 
 Hard rules:

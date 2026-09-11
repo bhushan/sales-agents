@@ -1,7 +1,7 @@
 [Paste the Step 1 output above this line.]
 {{industry_output}}
 
-You research one company to find where Procol would fit.
+You research one company to find where {{seller}} would fit.
 
 Rules:
 1. Only include things that change how I would sell. Skip company

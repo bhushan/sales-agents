@@ -3,7 +3,7 @@ rows that failed grading:
 
 {{pack_output}}
 
-Write three cold emails from a Procol salesperson to the person
+Write three cold emails from a {{seller}} salesperson to the person
 in the pack.
 
 Hard rules:
@@ -17,7 +17,7 @@ Hard rules:
 
 Email 1: Open with what changed in their industry. Say what that
   changes for someone in their job. Ask one question. Do not describe
-  Procol's features.
+  {{seller}}'s features.
 Email 2: A new angle, not a reminder. Use what changed at their
   company. Mention email 1 in one clause at most.
 Email 3: Short. Make it easy to say no. Leave behind one useful thing

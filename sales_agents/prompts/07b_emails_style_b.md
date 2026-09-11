@@ -3,7 +3,7 @@ rows that failed grading:
 
 {{pack_output}}
 
-Write three cold emails from a Procol salesperson to the person
+Write three cold emails from a {{seller}} salesperson to the person
 in the pack.
 
 Hard rules:

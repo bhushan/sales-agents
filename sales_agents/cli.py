@@ -57,14 +57,19 @@ class Spinner:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sales-agents",
-        description="Chain Procol sales-research prompts (ICP -> industry -> "
+        description="Chain sales-research prompts (ICP -> industry -> "
         "account -> roles -> people -> pack -> grade -> emails -> LinkedIn "
         "-> grade messages) through the Claude Code CLI.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     run_p = sub.add_parser("run", help="Start a new research chain for a company.")
-    run_p.add_argument("--company", required=True, help="Target company name.")
+    run_p.add_argument(
+        "--seller",
+        required=True,
+        help="Who you sell for, e.g. 'MoveInSync' (used in outreach copy).",
+    )
+    run_p.add_argument("--company", required=True, help="Target account name.")
     run_p.add_argument("--industry", required=True, help="Target industry name.")
     run_p.add_argument("--group", default="", help="Workshop group label (optional).")
     run_p.add_argument(
@@ -184,6 +189,7 @@ def cmd_run(args) -> int:
         model=args.model,
         group=args.group,
         date=date,
+        seller=args.seller,
         completed={},
     )
     state.save()

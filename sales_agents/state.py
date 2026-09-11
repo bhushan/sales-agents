@@ -22,6 +22,7 @@ class RunState:
     model: str
     group: str
     date: str
+    seller: str = ""
     completed: dict = field(default_factory=dict)
 
     def save(self) -> None:

@@ -25,6 +25,7 @@ class Pipeline:
             "industry": state.industry,
             "group": state.group,
             "date": state.date,
+            "seller": state.seller,
         }
         self.values["our_product"] = (
             (self.context_dir / "our_product.md").read_text().strip()
