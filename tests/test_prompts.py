@@ -144,6 +144,50 @@ class MessageGraderTests(unittest.TestCase):
         self.assertIn("tracks or is planning internally", flat(self.text))
 
 
+class BottomLineUpFrontTests(unittest.TestCase):
+    """The email says its point in the first sentence and spends the rest
+    of itself backing that up. Without this the writer reverts to an
+    evidence-first opener, where the reason for the email arrives in
+    sentence three and the reader has already stopped."""
+
+    def setUp(self):
+        self.text = prompt("07_emails.md")
+
+    def test_the_prompt_asks_for_the_bottom_line_first(self):
+        self.assertIn("bottom line up front", flat(self.text))
+
+    def test_the_point_is_the_first_sentence(self):
+        self.assertIn("the bottom line. one sentence", flat(self.text))
+        self.assertIn("nothing before it", flat(self.text))
+
+    def test_evidence_comes_after_the_point_not_before_it(self):
+        body = flat(self.text)
+        self.assertLess(
+            body.index("the bottom line. one sentence"),
+            body.index("the evidence."),
+            "the evidence must be ordered after the bottom line",
+        )
+
+    def test_the_ask_is_last_and_single(self):
+        body = flat(self.text)
+        self.assertIn("the ask. one question or one offer", body)
+        self.assertLess(body.index("the evidence."), body.index("the ask."))
+
+    def test_the_subject_line_carries_the_point_rather_than_teasing_it(self):
+        self.assertIn("the subject line is the bottom line, compressed", flat(self.text))
+        self.assertIn("not a teaser", flat(self.text))
+
+    def test_the_bottom_line_is_still_traced_to_pack_fields(self):
+        """It is a consequence sentence, which is the shape most inventions
+        take. It only survives if the trace table names what it rests on."""
+        self.assertIn("the trace table has to name every one of them", flat(self.text))
+
+    def test_each_email_has_its_own_bottom_line(self):
+        for label in ("Email 1:", "Email 2:", "Email 3:"):
+            block = self.text.split(label, 1)[1].split("Email", 1)[0]
+            self.assertIn("bottom line", block.lower(), label)
+
+
 class WriterPromptTests(unittest.TestCase):
     """Both writers get the same ban list, because the grader found the same
     inventions in emails and in LinkedIn messages."""
