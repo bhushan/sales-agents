@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from sales_agents import pairings, settings, ui
-from sales_agents.cli import build_parser, collect_inputs
+from sales_agents.cli import build_parser, cmd_export, collect_inputs
 from sales_agents.steps import STEP_ORDER
 from sales_agents.state import RunState
 
@@ -285,6 +285,78 @@ class PairingTests(unittest.TestCase):
 
         with self.assertRaises(ui.InputAborted):
             pairings.choose(input_fn=fake, out=self.out)
+
+
+class ExportTests(unittest.TestCase):
+    def setUp(self):
+        ui.set_color(False)
+        self.tmp = TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        run_dir = self.root / "runs" / "tata-steel"
+        run_dir.mkdir(parents=True)
+        (run_dir / "00-icp.md").write_text("# ICP\n\nVERIFIED: 3 | TOTAL: 3\n")
+        RunState(
+            run_dir=run_dir,
+            company="Tata Steel",
+            industry="Steel manufacturing",
+            model="sonnet",
+            group="",
+            date="2026-09-11",
+            seller="MoveInSync",
+            offering="employee commute software",
+            completed={"icp": "00-icp.md"},
+        ).save()
+        self.out_dir = self.root / "runs"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _args(self, **overrides):
+        argv = ["export", "--out-dir", str(self.out_dir)]
+        for flag, value in overrides.items():
+            argv += ["--" + flag.replace("_", "-"), str(value)]
+        return build_parser().parse_args(argv)
+
+    def test_export_is_a_subcommand(self):
+        args = self._args()
+        self.assertEqual(args.command, "export")
+
+    def test_writing_the_page(self):
+        target = self.root / "report.html"
+        code = cmd_export(self._args(html=target), out=io.StringIO())
+        self.assertEqual(code, 0)
+        html = target.read_text()
+        self.assertIn("Tata Steel", html)
+        self.assertIn("</html>", html)
+
+    def test_the_default_path_lands_next_to_the_runs(self):
+        code = cmd_export(self._args(), out=io.StringIO())
+        self.assertEqual(code, 0)
+        self.assertTrue((self.out_dir / "report.html").exists())
+
+    def test_one_run_can_be_exported_on_its_own(self):
+        args = build_parser().parse_args(
+            ["export", str(self.out_dir / "tata-steel"), "--html", str(self.root / "one.html")]
+        )
+        self.assertEqual(cmd_export(args, out=io.StringIO()), 0)
+        self.assertIn("Tata Steel", (self.root / "one.html").read_text())
+
+    def test_the_path_written_is_reported(self):
+        out = io.StringIO()
+        cmd_export(self._args(html=self.root / "report.html"), out=out)
+        self.assertIn("report.html", ui.strip_ansi(out.getvalue()))
+
+    def test_no_runs_is_not_an_error(self):
+        empty = self.root / "empty"
+        empty.mkdir()
+        args = build_parser().parse_args(["export", "--out-dir", str(empty)])
+        out = io.StringIO()
+        self.assertEqual(cmd_export(args, out=out), 0)
+        self.assertIn("No runs", ui.strip_ansi(out.getvalue()))
+
+    def test_an_unreadable_run_directory_fails_loudly(self):
+        args = build_parser().parse_args(["export", str(self.root / "nope")])
+        self.assertEqual(cmd_export(args, out=io.StringIO()), 1)
 
 
 if __name__ == "__main__":

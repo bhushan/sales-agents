@@ -10,18 +10,22 @@ import re
 from . import ui
 
 # Words the chain uses as verdicts, painted wherever they appear.
-WORDS = (
-    ("CANNOT WRITE THIS EMAIL", ui.red),
-    ("DO NOT USE", ui.red),
-    ("FROM PACK", ui.green),
-    ("VERIFIED", ui.green),
-    ("ASSERTED", ui.yellow),
-    ("INFERRED", ui.yellow),
-    ("GENERIC", ui.yellow),
-    ("STALE", ui.yellow),
-    ("MADE UP", ui.red),
-    ("BANNED", ui.red),
+WORD_LEVEL = (
+    ("CANNOT WRITE THIS EMAIL", "bad"),
+    ("DO NOT USE", "bad"),
+    ("FROM PACK", "good"),
+    ("VERIFIED", "good"),
+    ("ASSERTED", "warn"),
+    ("INFERRED", "warn"),
+    ("GENERIC", "warn"),
+    ("STALE", "warn"),
+    ("MADE UP", "bad"),
+    ("BANNED", "bad"),
 )
+
+LEVEL_PAINT = {"good": ui.green, "warn": ui.yellow, "bad": ui.red}
+
+WORDS = tuple((word, LEVEL_PAINT[level]) for word, level in WORD_LEVEL)
 
 
 def paint_words(text: str) -> str:
@@ -35,7 +39,7 @@ def paint_words(text: str) -> str:
 # inline markers
 # --------------------------------------------------------------------------
 
-_INLINE_RE = re.compile(
+INLINE_RE = re.compile(
     r"(?P<tick>`+)(?P<code>.+?)(?P=tick)"
     r"|\[(?P<ltext>[^\]\n]+)\]\((?P<lurl>[^)\s]+)\)"
     r"|\*\*(?P<b1>\S(?:.*?\S)?)\*\*"
@@ -60,7 +64,7 @@ def _inline(text: str):
         paints.extend([paint] * len(chunk))
 
     pos = 0
-    for match in _INLINE_RE.finditer(text):
+    for match in INLINE_RE.finditer(text):
         add(text[pos : match.start()], None)
         if match.group("code") is not None:
             add(match.group("code"), ui.magenta)
@@ -175,16 +179,16 @@ def wrap(text: str, width: int):
 # blocks
 # --------------------------------------------------------------------------
 
-_FENCE_RE = re.compile(r"^\s*(```|~~~)")
-_RULE_RE = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
-_HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
-_QUOTE_RE = re.compile(r"^\s*>\s?(.*)$")
-_BULLET_RE = re.compile(r"^\s*[-*+](?:\s+(.*))?$")
-_ORDERED_RE = re.compile(r"^\s*(\d{1,3}[.)])\s+(.*)$")
-_FIELD_RE = re.compile(
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
+RULE_RE = re.compile(r"^\s*(-{3,}|\*{3,}|_{3,})\s*$")
+HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+QUOTE_RE = re.compile(r"^\s*>\s?(.*)$")
+BULLET_RE = re.compile(r"^\s*[-*+](?:\s+(.*))?$")
+ORDERED_RE = re.compile(r"^\s*(\d{1,3}[.)])\s+(.*)$")
+FIELD_RE = re.compile(
     r"^(?P<label>[A-Z][A-Za-z0-9 +/()&'’-]{0,38}):(?:\s+(?P<value>.*))?$"
 )
-_SEPARATOR_CELL_RE = re.compile(r"^:?-+:?$")
+SEPARATOR_CELL_RE = re.compile(r"^:?-+:?$")
 
 QUOTE_BAR = "▏ "
 BULLET = "• "
@@ -200,9 +204,9 @@ def render(text: str, width: int):
     while index < len(source):
         raw = source[index]
 
-        if _FENCE_RE.match(raw):
+        if FENCE_RE.match(raw):
             index += 1
-            while index < len(source) and not _FENCE_RE.match(source[index]):
+            while index < len(source) and not FENCE_RE.match(source[index]):
                 lines.append(ui.dim(ui.truncate(source[index], width)))
                 index += 1
             index += 1
@@ -216,7 +220,7 @@ def render(text: str, width: int):
             lines.extend(_table(block, width))
             continue
 
-        heading = _HEADING_RE.match(raw)
+        heading = HEADING_RE.match(raw)
         if heading and lines and lines[-1].strip():
             lines.append("")
         lines.extend(_block(raw, heading, width))
@@ -230,29 +234,29 @@ def _block(raw: str, heading, width: int):
         return [""]
     if heading:
         return _wrap_styled(heading.group(2), width, lambda s: ui.bold(ui.cyan(s)))
-    if _RULE_RE.match(raw):
+    if RULE_RE.match(raw):
         return [ui.dim(RULE_CHAR * width)]
 
-    quote = _QUOTE_RE.match(raw)
+    quote = QUOTE_RE.match(raw)
     if quote:
         return _wrap_inline(
             quote.group(1), width, prefix=ui.dim(QUOTE_BAR), indent="  "
         )
 
-    ordered = _ORDERED_RE.match(raw)
+    ordered = ORDERED_RE.match(raw)
     if ordered:
         marker = ordered.group(1) + " "
         return _wrap_inline(
             ordered.group(2), width, prefix=ui.dim(marker), indent=" " * len(marker)
         )
 
-    bullet = _BULLET_RE.match(raw)
+    bullet = BULLET_RE.match(raw)
     if bullet:
         return _wrap_inline(
             bullet.group(1) or "", width, prefix=ui.dim(BULLET), indent="  "
         )
 
-    field = _FIELD_RE.match(raw)
+    field = FIELD_RE.match(raw)
     if field:
         return _wrap_inline(
             field.group("value") or "",
@@ -269,7 +273,7 @@ def _block(raw: str, heading, width: int):
 # --------------------------------------------------------------------------
 
 
-def _cells(line: str):
+def cells(line: str):
     text = line.strip()
     if text.startswith("|"):
         text = text[1:]
@@ -278,13 +282,13 @@ def _cells(line: str):
     return [cell.strip() for cell in text.split("|")]
 
 
-def _is_separator(cells) -> bool:
-    return bool(cells) and all(_SEPARATOR_CELL_RE.match(cell or "") for cell in cells)
+def is_separator(cells) -> bool:
+    return bool(cells) and all(SEPARATOR_CELL_RE.match(cell or "") for cell in cells)
 
 
 def _table(block, width: int):
-    rows = [_cells(line) for line in block]
-    rows = [row for row in rows if not _is_separator(row)]
+    rows = [cells(line) for line in block]
+    rows = [row for row in rows if not is_separator(row)]
     if not rows:
         return []
 

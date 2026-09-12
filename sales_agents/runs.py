@@ -1,11 +1,12 @@
 """Finding runs on disk and pairing each stage with the file it produced."""
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import scoreboard
 from .state import RunState
-from .steps import STEP_ORDER, STEPS
+from .steps import STEP_ORDER, STEPS, Step
 
 
 @dataclass
@@ -75,6 +76,65 @@ class RunSummary:
                 )
             )
         return found
+
+    def all_stages(self):
+        """Every stage of the chain, then any other output left in the run
+        directory: older runs wrote one file per email style, and those are
+        the run's real work even though no current step claims them."""
+        found = self.stages()
+        claimed = {stage.path.name for stage in found}
+        extras = []
+        for path in sorted(self.run_dir.glob("*.md")):
+            if path.name in claimed:
+                continue
+            try:
+                text = path.read_text()
+            except OSError:
+                continue
+            extras.append(
+                Stage(
+                    step=Step(
+                        id=path.stem,
+                        title=_extra_title(path.name),
+                        template="",
+                        output_name=path.name,
+                        produces="",
+                    ),
+                    path=path,
+                    exists=True,
+                    text=text,
+                    counts=scoreboard.parse_counts(text),
+                )
+            )
+        if not extras:
+            return found
+
+        # An extra file numbered like a stage is that stage, written under
+        # another name: do not also report the stage as never run.
+        replaced = {_slot(stage.path.name) for stage in extras}
+        found = [
+            stage
+            for stage in found
+            if stage.exists or _slot(stage.path.name) not in replaced
+        ]
+        found.extend(extras)
+        found.sort(key=lambda stage: stage.path.name)
+        return found
+
+
+def _slot(filename: str):
+    """The stage number a file name starts with, if any."""
+    match = re.match(r"^(\d+)", filename)
+    return match.group(1) if match else None
+
+
+def _extra_title(filename: str) -> str:
+    """A readable title for an output the current chain does not know about,
+    such as a run written when emails came in two styles."""
+    stem = Path(filename).stem
+    stem = re.sub(r"^\d+[a-z]?[-_]", "", stem)
+    words = stem.replace("_", " ").replace("-", " ").strip()
+    return words[:1].upper() + words[1:] if words else filename
 
 
 def load(run_dir) -> RunSummary:

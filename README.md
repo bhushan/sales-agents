@@ -50,11 +50,13 @@ Skip the questions by passing them:
   --company "Tata Steel"
 ```
 
-Resume an interrupted or paused run, and see what is on disk:
+Resume an interrupted or paused run, see what is on disk, and write it
+all to one page:
 
 ```bash
 ./bin/sales-agents continue research-chain/outputs/tata-steel
 ./bin/sales-agents list
+./bin/sales-agents export
 ```
 
 ## Reading the outputs
@@ -112,6 +114,40 @@ of what it produced. `VERIFIED` and `FROM PACK` are green, `ASSERTED`,
 Open one run directly with `./bin/sales-agents view <run-dir>`. Piped or
 with `--plain`, it prints the same stage list and counters as flat text
 instead of taking over the screen.
+
+## Sending the runs to someone without the tool
+
+```bash
+./bin/sales-agents export
+```
+
+Writes `research-chain/outputs/report.html`: every run on one page, with
+the stage list, each stage's output, its counters, and the verdicts. The
+file is self-contained — no fonts, scripts or styles are fetched — so it
+opens from disk, attaches to an email, and prints.
+
+```
+  ▰ 85.7%  of 7 graded rows name a source you could check
+  ▰ 17/24  sentences in the emails trace back to a pack field
+```
+
+Each account opens with those two numbers, because they are what the
+workshop marks. Under them the stages sit in a rail on the left and the
+stage you picked fills the page, and the last section puts every run in
+one table, so a run whose research went thin is obvious next to one whose
+did not.
+
+| Key | Does |
+| --- | --- |
+| `←` `→` | Previous / next stage |
+| `shift` + `←` `→` | Previous / next account |
+| `/` then `enter` | Search every stage, jump to the next one with a hit |
+| `c` | Copy the stage you are reading |
+
+```bash
+./bin/sales-agents export --html report.html --open   # somewhere else, opened
+./bin/sales-agents export research-chain/outputs/tata-steel   # one run only
+```
 
 ## What you see while it runs
 

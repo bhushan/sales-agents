@@ -7,10 +7,11 @@ import os
 import shlex
 import subprocess
 import sys
+import webbrowser
 import time
 from pathlib import Path
 
-from . import browser, pairings, runs, scoreboard, settings, ui
+from . import browser, htmlout, pairings, runs, scoreboard, settings, ui
 from .dashboard import Dashboard
 from .pipeline import MissingDependencyError, Pipeline
 from .runner import DEFAULT_TIMEOUT, ClaudeRunError, run_claude
@@ -118,6 +119,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     view_p.add_argument("--out-dir", default=str(DEFAULT_RUNS_DIR))
     _add_display_flags(view_p)
+
+    export_p = sub.add_parser(
+        "export", help="Write the runs to one HTML page you can open or send."
+    )
+    export_p.add_argument(
+        "run_dir",
+        nargs="*",
+        help="Run directories to export (default: every run under --out-dir).",
+    )
+    export_p.add_argument("--out-dir", default=str(DEFAULT_RUNS_DIR))
+    export_p.add_argument(
+        "--html",
+        default=None,
+        help="Where to write the page (default: <out-dir>/report.html).",
+    )
+    export_p.add_argument(
+        "--open", action="store_true", help="Open the page when it is written."
+    )
+    _add_display_flags(export_p)
 
     return parser
 
@@ -384,6 +404,43 @@ def cmd_list(args) -> int:
     return 0
 
 
+def cmd_export(args, out=None) -> int:
+    """Every run as one page: the stages, their counters, and the verdicts,
+    readable by someone who does not have this tool."""
+    out = out or sys.stdout
+    out_dir = Path(args.out_dir)
+
+    summaries = []
+    for given in getattr(args, "run_dir", None) or []:
+        try:
+            summaries.append(runs.load(Path(given)))
+        except (OSError, ValueError):
+            print(f"No readable state.json under {given}.", file=sys.stderr)
+            return 1
+    if not summaries:
+        summaries = runs.discover(out_dir)
+
+    if not summaries:
+        out.write("\n  " + ui.dim("No runs yet under " + str(out_dir)) + "\n")
+        return 0
+
+    target = Path(args.html) if args.html else out_dir / "report.html"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(htmlout.document(summaries))
+
+    stages = sum(summary.done for summary in summaries)
+    out.write(
+        "\n  "
+        + ui.green("Wrote ")
+        + ui.bold(str(target))
+        + ui.dim(f"   {len(summaries)} runs · {stages} stages")
+        + "\n\n"
+    )
+    if getattr(args, "open", False):
+        webbrowser.open(target.resolve().as_uri())
+    return 0
+
+
 # --------------------------------------------------------------------------
 # execution
 # --------------------------------------------------------------------------
@@ -544,6 +601,8 @@ def main(argv=None) -> int:
         return cmd_list(args)
     if args.command == "view":
         return cmd_view(args)
+    if args.command == "export":
+        return cmd_export(args)
     parser.print_help()
     return 1
 
