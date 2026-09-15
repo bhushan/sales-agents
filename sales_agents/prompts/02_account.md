@@ -1,4 +1,3 @@
-[Paste the Step 1 output above this line.]
 {{industry_output}}
 
 You research one company to find where {{seller}} would fit.

@@ -233,5 +233,11 @@ class NoHardcodedAccountTests(unittest.TestCase):
                 self.assertNotIn(name.lower(), text.lower(), f"{step.template}: {name}")
 
 
+class ChainedPromptTests(unittest.TestCase):
+    def test_prompts_do_not_instruct_the_user_to_paste_prior_output(self):
+        for step in STEPS.values():
+            self.assertNotIn("[paste the step", prompt(step.template).lower())
+
+
 if __name__ == "__main__":
     unittest.main()

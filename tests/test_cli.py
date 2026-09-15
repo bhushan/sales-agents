@@ -132,6 +132,16 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(args.offering, "commute")
         self.assertEqual(args.company, "Tata")
 
+    def test_run_accepts_codex_as_the_runner(self):
+        args = build_parser().parse_args(["run", "--runner", "codex"])
+        self.assertEqual(args.runner, "codex")
+
+    def test_continue_accepts_codex_as_the_runner(self):
+        args = build_parser().parse_args(
+            ["continue", "runs/tata-steel", "--runner", "codex"]
+        )
+        self.assertEqual(args.runner, "codex")
+
     def test_industry_is_optional(self):
         args = build_parser().parse_args(["run", "--company", "Tata"])
         self.assertIsNone(args.industry)

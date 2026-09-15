@@ -15,6 +15,10 @@ class ClaudeRunError(RuntimeError):
     pass
 
 
+class CodexRunError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class Activity:
     """One thing that happened inside a step, as it happened.
@@ -51,6 +55,23 @@ def build_command(*, model, allowed_tools=DEFAULT_ALLOWED_TOOLS, max_budget_usd=
         cmd += ["--tools", *allowed_tools, "--allowedTools", *allowed_tools]
     if max_budget_usd:
         cmd += ["--max-budget-usd", str(max_budget_usd)]
+    return cmd
+
+
+def build_codex_command(*, model):
+    """Headless Codex run with a read-only workspace and no saved session."""
+    cmd = [
+        "codex",
+        "exec",
+        "--json",
+        "--ephemeral",
+        "--sandbox",
+        "read-only",
+        "-c",
+        'approval_policy="never"',
+    ]
+    if model:
+        cmd += ["--model", model]
     return cmd
 
 
@@ -221,6 +242,31 @@ class StreamParser:
         ]
 
 
+class CodexStreamParser:
+    """Collects the final answer from `codex exec --json` events."""
+
+    def __init__(self):
+        self.result_text = None
+        self.error_message = ""
+
+    def feed(self, event):
+        if not isinstance(event, dict):
+            return []
+        event_type = event.get("type")
+        if event_type == "thread.started":
+            return [Activity(kind="session", label="session started")]
+        if event_type == "item.completed":
+            item = event.get("item") or {}
+            if item.get("type") != "agent_message":
+                return []
+            self.result_text = str(item.get("text") or "")
+            return [Activity(kind="done", label="done")]
+        if event_type == "turn.failed":
+            self.error_message = str(event.get("error") or "Codex turn failed")
+            return [Activity(kind="error", label="failed", detail=self.error_message)]
+        return []
+
+
 def _spawn(cmd):
     return subprocess.Popen(
         cmd,
@@ -331,6 +377,84 @@ def run_claude(
         detail = stderr_text or "no result message in the stream"
         raise ClaudeRunError(f"claude returned no output: {detail}")
 
+    return parser.result_text.strip()
+
+
+def run_codex(
+    prompt,
+    *,
+    model="gpt-5.6-terra",
+    timeout=DEFAULT_TIMEOUT,
+    on_activity=None,
+    spawn=None,
+):
+    """Run one prompt through Codex and return its final agent message."""
+    cmd = build_codex_command(model=model) + [prompt]
+    spawn = spawn or _spawn
+
+    try:
+        process = spawn(cmd)
+    except FileNotFoundError as exc:
+        raise CodexRunError(
+            "`codex` CLI not found on PATH. Install Codex and sign in first."
+        ) from exc
+
+    try:
+        process.stdin.close()
+    except (AttributeError, ValueError, OSError):
+        pass
+
+    parser = CodexStreamParser()
+    stderr_sink = []
+    timed_out = threading.Event()
+    stderr_reader = threading.Thread(
+        target=_drain, args=(process.stderr, stderr_sink), daemon=True
+    )
+    stderr_reader.start()
+
+    def _expire():
+        timed_out.set()
+        try:
+            process.kill()
+        except Exception:
+            pass
+
+    watchdog = threading.Timer(timeout, _expire)
+    watchdog.daemon = True
+    watchdog.start()
+
+    try:
+        for line in process.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            for activity in parser.feed(event):
+                if on_activity:
+                    on_activity(activity)
+        returncode = _wait(process)
+    except BaseException:
+        try:
+            process.kill()
+        except Exception:
+            pass
+        raise
+    finally:
+        watchdog.cancel()
+        stderr_reader.join(timeout=1.0)
+
+    stderr_text = (stderr_sink[0] if stderr_sink else "").strip()
+    if timed_out.is_set():
+        raise CodexRunError(f"Codex call timed out after {timeout}s")
+    if parser.error_message:
+        raise CodexRunError(f"Codex reported an error: {parser.error_message}")
+    if returncode not in (0, None):
+        raise CodexRunError(f"Codex exited {returncode}: {stderr_text or 'no stderr output'}")
+    if not parser.result_text:
+        raise CodexRunError(f"Codex returned no output: {stderr_text or 'no agent message'}")
     return parser.result_text.strip()
 
 

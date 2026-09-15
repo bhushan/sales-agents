@@ -21,13 +21,15 @@ icp -> shift -> account -> roles -> people -> pack -> grade research
      -> emails -> linkedin -> grade messages
 ```
 
-Each stage calls the local `claude` CLI in headless mode, using your
-existing Claude Code login, so there is no separate API key. Research
-stages can use `WebSearch` and `WebFetch` and nothing else.
+Each stage calls either the local `claude` CLI or `codex` CLI in headless mode,
+using the selected tool's existing login, so there is no separate API key.
+Claude remains the default. Use `--runner codex` to opt into Codex.
 
 ## Requirements
 
 - Claude Code installed and logged in (`claude` on your `PATH`).
+- Or Codex installed and logged in (`codex` on your `PATH`) when using
+  `--runner codex`.
 - Python 3.9+. Standard library only, no packages to install.
 
 ## Usage
@@ -48,6 +50,12 @@ Skip the questions by passing them:
   --seller "MoveInSync" \
   --sells "employee commute and fleet software" \
   --company "Tata Steel"
+
+./bin/sales-agents run \
+  --runner codex --model gpt-5.6-terra \
+  --seller "Alfred Scholar" \
+  --sells "a secure research workspace for researchers" \
+  --company "IIT Hyderabad"
 ```
 
 Resume an interrupted or paused run, see what is on disk, and write it
@@ -237,7 +245,8 @@ lost in the noise.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--model` | `sonnet` | Model alias passed to `claude --model`. |
+| `--runner` | `claude` | Runner to use: `claude` or `codex`. |
+| `--model` | runner default | Model passed to the selected runner. |
 | `--auto` | off | Do not pause between stages. |
 | `--budget` | none | Stop a stage that would cost more than this many dollars. |
 | `--timeout` | `1800` | Seconds allowed per stage. |

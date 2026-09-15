@@ -1,4 +1,3 @@
-[Paste the Step 2 output above this line.]
 {{account_output}}
 
 You work out which job titles at this company would care about {{seller}},

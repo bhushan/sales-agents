@@ -5,8 +5,12 @@ import unittest
 from sales_agents.runner import (
     Activity,
     ClaudeRunError,
+    CodexRunError,
+    CodexStreamParser,
     StreamParser,
     build_command,
+    build_codex_command,
+    run_codex,
     run_claude,
 )
 
@@ -75,6 +79,13 @@ class BuildCommandTests(unittest.TestCase):
 
     def test_budget_cap_is_omitted_when_unset(self):
         self.assertNotIn("--max-budget-usd", build_command(model="sonnet", allowed_tools=()))
+
+    def test_codex_uses_json_output_and_a_read_only_sandbox(self):
+        cmd = build_codex_command(model="gpt-5.6-terra")
+        self.assertEqual(cmd[:2], ["codex", "exec"])
+        self.assertIn("--json", cmd)
+        self.assertIn("read-only", cmd)
+        self.assertIn("gpt-5.6-terra", cmd)
 
 
 class StreamParserTests(unittest.TestCase):
@@ -203,11 +214,28 @@ class StreamParserTests(unittest.TestCase):
         self.assertEqual(self.parser.feed({"type": "brand_new_thing"}), [])
 
 
+class CodexStreamParserTests(unittest.TestCase):
+    def test_completed_agent_message_becomes_the_result(self):
+        parser = CodexStreamParser()
+        acts = parser.feed(
+            {
+                "type": "item.completed",
+                "item": {"type": "agent_message", "text": "FINAL ANSWER"},
+            }
+        )
+        self.assertEqual(parser.result_text, "FINAL ANSWER")
+        self.assertEqual(acts[0].kind, "done")
+
+
 class Sink(io.StringIO):
     """A stdin stand-in that survives the close() a real pipe needs."""
 
+    def __init__(self):
+        super().__init__()
+        self.close_called = False
+
     def close(self):
-        pass
+        self.close_called = True
 
 
 class FakeProcess:
@@ -318,6 +346,42 @@ class RunClaudeTests(unittest.TestCase):
         proc.wait = lambda timeout=None: (_ for _ in ()).throw(TimeoutError())
         with self.assertRaises(ClaudeRunError):
             run_claude("hello", model="sonnet", spawn=spawn_returning(proc), timeout=1)
+
+
+class RunCodexTests(unittest.TestCase):
+    def test_returns_the_completed_agent_message(self):
+        proc = FakeProcess(
+            jsonl(
+                {
+                    "type": "item.completed",
+                    "item": {"type": "agent_message", "text": "FINAL ANSWER"},
+                }
+            )
+        )
+        self.assertEqual(
+            run_codex("hello", model="gpt-5.6-terra", spawn=spawn_returning(proc)),
+            "FINAL ANSWER",
+        )
+
+    def test_closes_stdin_after_passing_the_prompt_as_an_argument(self):
+        proc = FakeProcess(
+            jsonl(
+                {
+                    "type": "item.completed",
+                    "item": {"type": "agent_message", "text": "FINAL ANSWER"},
+                }
+            )
+        )
+        run_codex("hello", model="gpt-5.6-terra", spawn=spawn_returning(proc))
+        self.assertTrue(proc.stdin.close_called)
+
+    def test_missing_cli_raises_a_friendly_error(self):
+        def spawn(cmd):
+            raise FileNotFoundError()
+
+        with self.assertRaises(CodexRunError) as ctx:
+            run_codex("hello", model="gpt-5.6-terra", spawn=spawn)
+        self.assertIn("codex", str(ctx.exception).lower())
 
 
 class ActivityTests(unittest.TestCase):

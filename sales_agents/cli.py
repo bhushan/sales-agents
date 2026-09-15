@@ -14,7 +14,7 @@ from pathlib import Path
 from . import browser, htmlout, pairings, runs, scoreboard, settings, ui
 from .dashboard import Dashboard
 from .pipeline import MissingDependencyError, Pipeline
-from .runner import DEFAULT_TIMEOUT, ClaudeRunError, run_claude
+from .runner import DEFAULT_TIMEOUT, ClaudeRunError, CodexRunError, run_claude, run_codex
 from .state import RunState, slugify
 from .steps import STEP_ORDER, STEPS
 
@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Chain sales-research prompts (ICP → industry → account → roles → "
             "people → pack → grade → emails → LinkedIn → grade messages) "
-            "through the Claude Code CLI. Run with no arguments to be asked "
+            "through Claude Code or Codex. Run with no arguments to be asked "
             "for the three inputs."
         ),
     )
@@ -71,7 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Target account's industry (default: the chain works it out).",
     )
     run_p.add_argument("--group", default="", help="Workshop group label (optional).")
-    run_p.add_argument("--model", default=None, help="Model alias passed to `claude --model`.")
+    run_p.add_argument("--model", default=None, help="Model passed to the selected runner.")
+    run_p.add_argument(
+        "--runner", choices=("claude", "codex"), default="claude",
+        help="CLI runner to use (default: claude).",
+    )
     run_p.add_argument(
         "--out-dir",
         default=str(DEFAULT_RUNS_DIR),
@@ -102,6 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     cont_p.add_argument("--auto", action="store_true")
     cont_p.add_argument("--budget", type=float, default=None)
     cont_p.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
+    cont_p.add_argument(
+        "--runner", choices=("claude", "codex"), default="claude",
+        help="CLI runner to use (default: claude).",
+    )
+    cont_p.add_argument("--model", default=None, help="Override the saved model.")
     _add_display_flags(cont_p)
 
     list_p = sub.add_parser("list", help="List runs and how far each one got.")
@@ -216,7 +225,7 @@ def _plan_lines(values, run_dir, step_ids, model):
 def _banner(out):
     width = min(ui.terminal_width(), 72)
     lines = ui.panel(
-        [ui.bold("sales agents"), ui.dim("research chain · runs on your Claude Code login")],
+        [ui.bold("sales agents"), ui.dim("research chain · Claude Code or Codex")],
         width=width,
     )
     out.write("\n" + "\n".join("  " + line for line in lines) + "\n")
@@ -302,7 +311,8 @@ def cmd_run(args) -> int:
         out.write(ui.dim("  nothing started.\n"))
         return 130
 
-    model = args.model or recent.get("model") or "sonnet"
+    default_model = "gpt-5.6-terra" if args.runner == "codex" else "sonnet"
+    model = args.model or recent.get("model") or default_model
     out_dir = Path(args.out_dir)
     run_dir = out_dir / slugify(values["company"])
     step_ids = list(STEP_ORDER)
@@ -347,6 +357,9 @@ def cmd_continue(args) -> int:
     except (OSError, ValueError):
         print(f"No readable state.json under {run_dir}.", file=sys.stderr)
         return 1
+    if args.model:
+        state.model = args.model
+        state.save()
 
     _banner(sys.stdout)
     step_ids = list(STEP_ORDER)
@@ -452,11 +465,13 @@ def _execute(state: RunState, args) -> int:
     live = not getattr(args, "plain", False) and sys.stdout.isatty()
     dash = Dashboard(steps, live=live)
 
-    runner = functools.partial(
-        run_claude,
-        timeout=getattr(args, "timeout", None) or DEFAULT_TIMEOUT,
-        max_budget_usd=getattr(args, "budget", None),
-    )
+    runner_kwargs = {"timeout": getattr(args, "timeout", None) or DEFAULT_TIMEOUT}
+    if getattr(args, "runner", "claude") == "codex":
+        runner_fn = run_codex
+    else:
+        runner_fn = run_claude
+        runner_kwargs["max_budget_usd"] = getattr(args, "budget", None)
+    runner = functools.partial(runner_fn, **runner_kwargs)
     pipeline = Pipeline(state, runner, on_activity=dash.activity)
 
     mode = {"auto": bool(getattr(args, "auto", False))}
@@ -493,7 +508,7 @@ def _execute(state: RunState, args) -> int:
     except KeyboardInterrupt:
         dash.step_failed(position["index"], "interrupted")
         exit_code = 130
-    except (ClaudeRunError, MissingDependencyError) as exc:
+    except (ClaudeRunError, CodexRunError, MissingDependencyError) as exc:
         dash.step_failed(position["index"], str(exc))
         exit_code = 1
     finally:

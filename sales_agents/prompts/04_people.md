@@ -1,4 +1,3 @@
-[Paste the Step 3 output above this line.]
 {{roles_output}}
 
 You find real named people in those roles, and the public evidence
